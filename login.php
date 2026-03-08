@@ -24,7 +24,6 @@ if ($identifier === "" || $password === "") {
     exit();
 }
 
-// Fetch user by email OR phone_number
 $stmt = $conn->prepare(
     "SELECT id, full_name, email, phone_number, org_code, status, password
      FROM users
@@ -45,7 +44,6 @@ if ($result->num_rows === 0) {
 
 $user = $result->fetch_assoc();
 
-// Verify password
 if (!password_verify($password, $user["password"])) {
     echo json_encode([
         "status" => "error",
@@ -54,7 +52,6 @@ if (!password_verify($password, $user["password"])) {
     exit();
 }
 
-// Success response
 echo json_encode([
     "status" => "success",
     "message" => "Login successful",
