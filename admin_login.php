@@ -24,7 +24,22 @@ if ($admin_id === "" || $password === "") {
     exit();
 }
 
-$stmt = $conn->prepare("SELECT id, full_name, email, phone_number, org_name, admin_id, password FROM admins WHERE admin_id = ? LIMIT 1");
+$stmt = $conn->prepare("
+    SELECT 
+        a.id,
+        a.full_name,
+        a.email,
+        a.phone_number,
+        a.org_name,
+        a.admin_id,
+        a.password,
+        o.id AS organization_id,
+        o.org_code
+    FROM admins a
+    LEFT JOIN organizations o ON a.admin_id = o.admin_id
+    WHERE a.admin_id = ?
+    LIMIT 1
+");
 $stmt->bind_param("s", $admin_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -55,11 +70,12 @@ echo json_encode([
         "full_name" => $admin["full_name"],
         "email" => $admin["email"],
         "phone_number" => $admin["phone_number"],
-        "org_code" => "",
+        "org_code" => $admin["org_code"] ?? "",
         "approval_status" => "approved"
     ],
     "admin_id" => $admin["admin_id"],
-    "org_name" => $admin["org_name"]
+    "org_name" => $admin["org_name"],
+    "organization_id" => isset($admin["organization_id"]) ? (int)$admin["organization_id"] : 0
 ]);
 
 $stmt->close();

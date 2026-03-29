@@ -16,7 +16,7 @@ if ($admin_id === "" || $user_id <= 0) {
     exit();
 }
 
-/* Get admin org_code using string admin_id */
+/* Get admin org_code */
 $stmt = $conn->prepare("SELECT org_code FROM organizations WHERE admin_id = ? LIMIT 1");
 $stmt->bind_param("s", $admin_id);
 $stmt->execute();
@@ -34,11 +34,11 @@ $org = $result->fetch_assoc();
 $org_code = $org["org_code"];
 $stmt->close();
 
-/* Check user belongs to same org and is pending */
+/* Check pending org request exists in user_organizations */
 $stmt = $conn->prepare("
     SELECT id
-    FROM users
-    WHERE id = ? AND org_code = ? AND status = 'pending'
+    FROM user_organizations
+    WHERE user_id = ? AND org_code = ? AND status = 'PENDING'
     LIMIT 1
 ");
 $stmt->bind_param("is", $user_id, $org_code);
@@ -48,25 +48,29 @@ $result = $stmt->get_result();
 if ($result->num_rows === 0) {
     echo json_encode([
         "status" => "error",
-        "message" => "Pending user not found in your organization"
+        "message" => "Pending organization request not found for this user"
     ]);
     exit();
 }
 $stmt->close();
 
-/* Reject user */
-$stmt = $conn->prepare("UPDATE users SET status = 'rejected' WHERE id = ?");
-$stmt->bind_param("i", $user_id);
+/* Reject only this org request */
+$stmt = $conn->prepare("
+    UPDATE user_organizations
+    SET status = 'REJECTED'
+    WHERE user_id = ? AND org_code = ?
+");
+$stmt->bind_param("is", $user_id, $org_code);
 
 if ($stmt->execute()) {
     echo json_encode([
         "status" => "success",
-        "message" => "User rejected successfully"
+        "message" => "User organization request rejected successfully"
     ]);
 } else {
     echo json_encode([
         "status" => "error",
-        "message" => "Failed to reject user"
+        "message" => "Failed to reject user organization request"
     ]);
 }
 

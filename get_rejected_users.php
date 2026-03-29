@@ -15,7 +15,7 @@ if ($admin_id === "") {
     exit();
 }
 
-/* Get org_code for this admin using string admin_id */
+/* Get org_code for this admin */
 $stmt = $conn->prepare("SELECT org_code FROM organizations WHERE admin_id = ? LIMIT 1");
 $stmt->bind_param("s", $admin_id);
 $stmt->execute();
@@ -31,12 +31,21 @@ if ($result->num_rows === 0) {
 
 $row = $result->fetch_assoc();
 $org_code = $row["org_code"];
+$stmt->close();
 
-/* Get rejected users only for this organization */
+/* Get rejected users for this organization from user_organizations */
 $stmt = $conn->prepare("
-    SELECT id, full_name, email, phone_number, status
-    FROM users
-    WHERE org_code = ? AND status = 'rejected'
+    SELECT 
+        u.id,
+        u.full_name,
+        u.email,
+        u.phone_number,
+        'rejected' AS status
+    FROM user_organizations uo
+    INNER JOIN users u ON u.id = uo.user_id
+    WHERE uo.org_code = ?
+      AND uo.status = 'REJECTED'
+    ORDER BY uo.id DESC
 ");
 $stmt->bind_param("s", $org_code);
 $stmt->execute();
@@ -45,7 +54,13 @@ $result = $stmt->get_result();
 $users = [];
 
 while ($row = $result->fetch_assoc()) {
-    $users[] = $row;
+    $users[] = [
+        "id" => strval($row["id"]),
+        "full_name" => $row["full_name"],
+        "email" => $row["email"],
+        "phone_number" => $row["phone_number"],
+        "status" => $row["status"]
+    ];
 }
 
 echo json_encode([
@@ -53,5 +68,6 @@ echo json_encode([
     "users" => $users
 ]);
 
+$stmt->close();
 $conn->close();
 ?>

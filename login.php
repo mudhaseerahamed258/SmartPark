@@ -25,7 +25,7 @@ if ($identifier === "" || $password === "") {
 }
 
 $stmt = $conn->prepare(
-    "SELECT id, full_name, email, phone_number, org_code, status, password
+    "SELECT id, full_name, email, phone_number, org_code, status, approval_seen, password
      FROM users
      WHERE email = ? OR phone_number = ?
      LIMIT 1"
@@ -43,6 +43,7 @@ if ($result->num_rows === 0) {
 }
 
 $user = $result->fetch_assoc();
+$stmt->close();
 
 if (!password_verify($password, $user["password"])) {
     echo json_encode([
@@ -50,6 +51,34 @@ if (!password_verify($password, $user["password"])) {
         "message" => "Invalid password"
     ]);
     exit();
+}
+
+$current_org_code = $user["org_code"];
+$approval_status = strtolower(trim($user["status"] ?? "not_joined"));
+
+/*
+ Keep current active org if present.
+ If user has no active org, check latest org request from user_organizations.
+*/
+if (empty($current_org_code) || $approval_status === "not_joined") {
+    $stmt = $conn->prepare("
+        SELECT org_code, status
+        FROM user_organizations
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    ");
+    $stmt->bind_param("i", $user["id"]);
+    $stmt->execute();
+    $orgResult = $stmt->get_result();
+
+    if ($orgResult->num_rows > 0) {
+        $latestOrg = $orgResult->fetch_assoc();
+        $current_org_code = $latestOrg["org_code"];
+        $approval_status = strtolower($latestOrg["status"]);
+    }
+
+    $stmt->close();
 }
 
 echo json_encode([
@@ -60,11 +89,11 @@ echo json_encode([
         "full_name" => $user["full_name"],
         "email" => $user["email"],
         "phone_number" => $user["phone_number"],
-        "org_code" => $user["org_code"],
-        "approval_status" => $user["status"]
+        "org_code" => $current_org_code,
+        "approval_status" => $approval_status,
+        "approval_seen" => (int)$user["approval_seen"]
     ]
 ]);
 
-$stmt->close();
 $conn->close();
 ?>
